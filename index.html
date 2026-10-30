@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camper-Planner</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>🚐 Camper<span>Planner</span></h1>
+      <select id="vehicle-select" title="Fahrzeugmodell"></select>
+      <select id="variant-select" title="Variante (Radstand / Dachhöhe)"></select>
+      <nav class="view-tabs">
+        <button class="view-tab" data-view="top">Draufsicht</button>
+        <button class="view-tab" data-view="side-right">Wand rechts</button>
+        <button class="view-tab" data-view="side-left">Wand links</button>
+        <button class="view-tab" data-view="rear">Heck (offen)</button>
+        <button class="view-tab" data-view="iso-rear">Iso Heck</button>
+        <button class="view-tab" data-view="iso-front">Iso Front</button>
+        <button class="view-tab" data-view="orbit" title="Frei drehbare 3D-Ansicht (linke Maustaste ziehen)">3D ⟲</button>
+        <button id="mode-toggle">◧ Drahtansicht</button>
+        <button id="zoom-reset" title="Zoom und Verschiebung zurücksetzen">⟲</button>
+        <span class="tb-sep"></span>
+        <button id="undo-btn" title="Rückgängig (Strg+Z)">↶</button>
+        <button id="redo-btn" title="Wiederholen (Strg+Y)">↷</button>
+        <button id="weight-toggle" title="Gewicht &amp; Schwerpunkt anzeigen">⚖ Gewicht</button>
+        <button id="dims-toggle" title="Maßketten der Auswahl anzeigen">⊞ Maße</button>
+        <button id="clash-toggle" title="Kollisionen rot hervorheben (an/aus)">⚠ Kollision</button>
+        <button id="filter-toggle" title="Aktiven Filter ein-/ausschalten (Auswahl im Panel „Filter“)">⚡ Filter</button>
+        <button id="snap-toggle" title="An Wänden/Boxen einrasten (Alt = aus)">⌁ Snap</button>
+        <button id="png-btn" title="Aktuelle Ansicht als PNG speichern">🖼 PNG</button>
+      </nav>
+    </header>
+
+    <aside>
+      <div class="panel">
+        <h2>Neue Box</h2>
+        <div class="form-row">
+          <label>Name
+            <input type="text" id="new-name" placeholder="z.B. Bett">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Länge (mm)
+            <input type="number" id="new-l" value="600" min="10" step="10">
+          </label>
+          <label>Breite (mm)
+            <input type="number" id="new-w" value="400" min="10" step="10">
+          </label>
+          <label>Höhe (mm)
+            <input type="number" id="new-h" value="400" min="10" step="10">
+          </label>
+        </div>
+        <button class="primary" id="add-box-btn">+ Hinzufügen</button>
+      </div>
+
+      <div class="panel">
+        <h2>Vorlagen</h2>
+        <div id="presets"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Möbel</h2>
+        <div id="box-list"></div>
+        <div class="io-row" style="margin-top:8px">
+          <button class="io-btn" id="connect-btn" title="Mehrere markierte Boxen verbinden (Shift-/Strg-Klick zum Mehrfachmarkieren)">⛓ Verbinden</button>
+          <button class="io-btn" id="disconnect-btn" title="Gruppe der ausgewählten Box trennen">✂ Trennen</button>
+        </div>
+        <div class="hint" style="margin-top:6px">Shift-/Strg-Klick markiert mehrere Boxen. Verbundene Boxen bewegen sich gemeinsam.</div>
+      </div>
+
+      <div class="panel" id="edit-panel" style="display:none">
+        <h2>Auswahl bearbeiten</h2>
+        <div class="form-row">
+          <label>Name
+            <input type="text" id="edit-name">
+          </label>
+          <label>Farbe
+            <input type="color" id="edit-color">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>x (mm)
+            <input type="number" id="edit-x" step="10">
+          </label>
+          <label>y (mm)
+            <input type="number" id="edit-y" step="10">
+          </label>
+          <label>z (mm)
+            <input type="number" id="edit-z" step="10">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Länge
+            <input type="number" id="edit-l" min="10" step="10">
+          </label>
+          <label>Breite
+            <input type="number" id="edit-w" min="10" step="10">
+          </label>
+          <label>Höhe
+            <input type="number" id="edit-h" min="10" step="10">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Gewicht (kg)
+            <input type="number" id="edit-weight" min="0" step="0.5" value="0">
+          </label>
+          <label>Transparenz <span id="edit-opacity-val" class="inline-val">100%</span>
+            <input type="range" id="edit-opacity" min="10" max="100" step="5" value="100">
+          </label>
+        </div>
+        <label class="check-row" title="Schneidet das Schnittvolumen aus überlappenden Boxen DERSELBEN Gruppe heraus, statt eine Kollision zu melden. Dazu die Boxen verbinden.">
+          <input type="checkbox" id="edit-subtract">
+          Als Subtraktionskörper verwenden (nur innerhalb der Gruppe)
+        </label>
+        <label class="check-row" title="Blendet die Box in allen Ansichten aus (bleibt in der Liste).">
+          <input type="checkbox" id="edit-hidden">
+          Box ausblenden
+        </label>
+        <div class="form-row" style="margin-bottom:2px">
+          <label>Filter-Zuordnung</label>
+        </div>
+        <div class="tag-chips" id="edit-tags"></div>
+        <label class="check-row" title="Zeigt den Freiraum, den ein Auszug beim Öffnen braucht — gestrichelt in allen Ansichten.">
+          <input type="checkbox" id="edit-pullout">
+          Auszug
+        </label>
+        <div id="edit-pullout-row" style="display:none">
+          <div class="form-row">
+            <label>Auszugsrichtung
+              <select id="edit-pullout-side">
+                <option value="rear">Heck</option>
+                <option value="front">Front</option>
+                <option value="left">links</option>
+                <option value="right">rechts</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>Tiefe (mm)
+              <input type="number" id="edit-pullout-depth" min="10" step="10">
+            </label>
+            <label>Breite (mm)
+              <input type="number" id="edit-pullout-w" min="0" step="10">
+            </label>
+            <label>Höhe (mm)
+              <input type="number" id="edit-pullout-h" min="0" step="10">
+            </label>
+          </div>
+          <div class="form-row">
+            <label>Versatz quer
+              <input type="number" id="edit-pullout-u" min="0" step="10">
+            </label>
+            <label>Versatz hoch
+              <input type="number" id="edit-pullout-v" min="0" step="10">
+            </label>
+          </div>
+          <div class="hint" style="margin:-2px 0 8px">
+            Breite und Höhe: <strong>0 = so groß wie die Box</strong> — der Versatz
+            wirkt dann nicht. Sonst positionieren die beiden Versatz-Maße den
+            Auszug auf seiner Fläche, gemessen ab der unteren bzw. linken Kante
+            der Box (quer = Fahrerseite → Schiebetür bzw. Front → Heck).
+          </div>
+        </div>
+        <div class="io-row">
+          <button class="io-btn" id="edit-rotate" title="Um 90° drehen (Taste R)">⟳ 90° drehen</button>
+          <button class="danger" id="edit-delete">Box löschen</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Filter</h2>
+        <div class="filter-list" id="filter-list"></div>
+        <div class="hint" id="filter-status" style="margin:8px 0"></div>
+        <div class="form-row">
+          <label>Neuer Filter
+            <input type="text" id="filter-new" placeholder="z.B. Strom, Wasser, Gas">
+          </label>
+        </div>
+        <button class="primary" id="filter-add-btn">+ Filter anlegen</button>
+        <div class="hint" style="margin-top:8px">
+          Ein Filter markiert Möbel quer durchs ganze Fahrzeug. Das Häkchen links
+          schaltet jeden Filter <strong>einzeln</strong> zu — mehrere gleichzeitig
+          sind möglich. Sichtbar bleibt, was zu mindestens einem aktiven Filter
+          gehört; alles andere wird transparent. Zuordnung im Panel „Auswahl
+          bearbeiten“ bzw. „Sitzbank“.
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Sitzbank</h2>
+        <label class="check-row" title="Schnierle SL3 2er-Sitzbank auf Rail-In-Bodenschienen ins Fahrzeug modellieren.">
+          <input type="checkbox" id="bench-on">
+          Schnierle SL3 · 2er (970 mm) einbauen
+        </label>
+        <div id="bench-fields" style="display:none">
+          <label class="check-row" title="Ausgeklappt als Schlafplatz darstellen (Liegelänge 1877 mm).">
+            <input type="checkbox" id="bench-bed">
+            Als Liege ausklappen (Schlafplatz)
+          </label>
+          <label class="check-row" title="Blickrichtung der Bank: nach vorn zur Trennwand (Standard) oder nach hinten zum Heck.">
+            <input type="checkbox" id="bench-face">
+            Blickrichtung nach vorn
+          </label>
+          <div class="form-row">
+            <label>Fußhöhe (mm)
+              <select id="bench-foot"></select>
+            </label>
+          </div>
+          <div class="form-row" style="margin-bottom:2px">
+            <label>Filter-Zuordnung</label>
+          </div>
+          <div class="tag-chips" id="bench-tags"></div>
+          <div class="form-row">
+            <label>Schiene x (mm)
+              <input type="number" id="bench-railx" step="10">
+            </label>
+            <label>Quermitte y (mm)
+              <input type="number" id="bench-y" step="10">
+            </label>
+          </div>
+          <div class="form-row">
+            <label>Bank auf Schiene
+              <input type="number" id="bench-offset" step="10">
+            </label>
+            <label>Gewicht (kg)
+              <input type="number" id="bench-weight" min="0" step="1">
+            </label>
+          </div>
+          <div class="hint" id="bench-info"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Fenster &amp; Dachfenster</h2>
+        <div id="window-add-row">
+          <button class="preset-btn" id="add-window-left">+ Wand links</button>
+          <button class="preset-btn" id="add-window-right">+ Wand rechts</button>
+          <button class="preset-btn" id="add-window-rear">+ Heck</button>
+          <button class="preset-btn" id="add-window-roof">+ Dachfenster</button>
+        </div>
+        <div id="window-list"></div>
+      </div>
+
+      <div class="panel" id="window-edit-panel" style="display:none">
+        <h2 id="wedit-title">Fenster bearbeiten</h2>
+        <div class="form-row" id="wedit-pos-row">
+          <label id="wedit-x-label">x (mm)
+            <input type="number" id="wedit-x" step="10">
+          </label>
+          <label id="wedit-second-label">z (mm)
+            <input type="number" id="wedit-second" step="10">
+          </label>
+        </div>
+        <div class="form-row">
+          <label id="wedit-w-label">Breite (mm)
+            <input type="number" id="wedit-w" min="50" step="10">
+          </label>
+          <label id="wedit-h-label">Höhe (mm)
+            <input type="number" id="wedit-h" min="50" step="10">
+          </label>
+        </div>
+        <button class="danger" id="wedit-delete">Fenster löschen</button>
+      </div>
+
+      <div class="panel">
+        <h2>Türen</h2>
+        <div id="window-add-row">
+          <button class="preset-btn" id="add-door-left">+ Wand links</button>
+          <button class="preset-btn" id="add-door-right">+ Wand rechts</button>
+          <button class="preset-btn" id="add-door-rear">+ Heck</button>
+        </div>
+        <div id="door-list"></div>
+        <div class="hint" style="margin-top:6px">Türen sind ab Werk je Fahrzeug vorbelegt und frei verschieb-/bemaßbar. Beim Fahrzeugwechsel werden sie neu geladen.</div>
+      </div>
+
+      <div class="panel" id="door-edit-panel" style="display:none">
+        <h2 id="dedit-title">Tür bearbeiten</h2>
+        <div class="form-row">
+          <label>Typ
+            <select id="dedit-type"></select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label id="dedit-x-label">x (mm)
+            <input type="number" id="dedit-x" step="10">
+          </label>
+          <label>Unterkante z (mm)
+            <input type="number" id="dedit-z" step="10">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Breite (mm)
+            <input type="number" id="dedit-w" min="100" step="10">
+          </label>
+          <label>Höhe (mm)
+            <input type="number" id="dedit-h" min="100" step="10">
+          </label>
+        </div>
+        <button class="danger" id="dedit-delete">Tür löschen</button>
+      </div>
+
+      <div class="panel">
+        <h2>Plan speichern</h2>
+        <div class="io-row">
+          <button class="io-btn" id="export-btn">Export JSON</button>
+          <label class="io-btn">
+            Import JSON
+            <input type="file" id="import-input" accept=".json" style="display:none">
+          </label>
+        </div>
+      </div>
+
+      <div class="hint">
+        <strong>Bedienung:</strong><br>
+        Klick = Box auswählen · Ziehen = verschieben<br>
+        Shift-/Strg-Klick = mehrere Boxen markieren (zum Verbinden)<br>
+        In Iso-Ansicht: Ziehen = auf Boden, Shift+Ziehen = Höhe<br>
+        Pfeiltasten = schrittweise (Alt = 1&nbsp;mm fein)<br>
+        Mausrad = Zoom · Rechte Maustaste = Ansicht verschieben<br>
+        Entf = Box löschen · R = um 90° drehen<br>
+        Strg+Z / Strg+Y = Rückgängig / Wiederholen<br>
+        Draufsicht = Blick von oben (Schiebetür oben, Fahrerseite unten).<br>
+        <strong>Snap:</strong> Boxen rasten an Wänden/Nachbarn ein (Alt beim Ziehen = aus).<br>
+        <strong>Gewicht/Maße:</strong> Schalter in der Kopfzeile. Maße erscheinen
+        nur für die ausgewählte Box — <span style="color:#1f6feb">blau</span> = Abstand
+        zur Nachbarbox, <span style="color:#2f8f5b">grün</span> = Abstand zur Innenwand.<br>
+        <strong>Auszug:</strong> Häkchen an der Box → der Freiraum beim Öffnen wird
+        gestrichelt eingeblendet (Richtung, Tiefe, Breite und Höhe einstellbar).<br>
+        <strong>Filter:</strong> Im Panel „Filter" beliebig viele Kategorien anlegen
+        (Strom, Wasser, Gas …), Möbel im Bearbeiten-Panel zuordnen. Der aktive
+        Filter lässt nur die zugeordneten Möbel voll sichtbar; „⚡ Filter" in der
+        Kopfzeile schaltet ihn schnell aus und wieder ein.<br>
+        <strong>Sitzbank:</strong> Schnierle SL3 auf 1250-mm-Bodenschienen.
+        Ziehen = Bank auf der Schiene, Shift+Ziehen = Schienen im Boden.<br>
+        <strong>Subtraktion:</strong> Häkchen setzen → die Box schneidet ihr
+        Schnittvolumen aus anderen Boxen (und aus Radkästen) heraus.<br>
+        <strong>Verbinden:</strong> Mehrere Boxen markieren → „⛓ Verbinden".
+      </div>
+    </aside>
+
+    <main>
+      <canvas id="canvas"></canvas>
+    </main>
+
+    <div id="statusbar"></div>
+  </div>
+
+  <script src="js/vehicles.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
